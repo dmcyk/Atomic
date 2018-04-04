@@ -14,9 +14,7 @@ private func sink<T>(_ val: inout T) { }
 class TestAtomicTests: XCTestCase {
 
     func testUnfair() {
-        if #available(macOS 10.12, *) {
-            executeLockTest(Atomic<Int, UnfairLock>(0))
-        }
+        executeLockTest(Atomic<Int, UnfairLock>(0))
     }
 
     func testRW() {
@@ -33,7 +31,7 @@ class TestAtomicTests: XCTestCase {
 
     private func executeLockTest<T>(_ atomic: Atomic<Int, T>) {
         let dispatchBlockCount = 16
-        let iterationCountPerBlock = 1
+        let iterationCountPerBlock = 1_000
         // This is an example of a performance test case.
         let queues = [
             DispatchQueue.global(qos: DispatchQoS.QoSClass.userInteractive),
