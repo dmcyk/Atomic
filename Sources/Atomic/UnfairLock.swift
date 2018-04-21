@@ -8,11 +8,15 @@
 import Foundation
 
 @available(macOS 10.12, iOS 10.0, *)
-final private class _UnfairLock: MututalLock {
+final public class _UnfairLock: MututalLock {
 
-    typealias LockType = os_unfair_lock
+    public typealias LockType = os_unfair_lock
 
-    var lock = os_unfair_lock()
+    private var lock = os_unfair_lock()
+
+    public init() {
+
+    }
 
     public func withAnyLock<T>(_ call: () -> T) -> T {
         os_unfair_lock_lock(&lock)
