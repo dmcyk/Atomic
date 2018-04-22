@@ -7,13 +7,7 @@
 
 import Foundation
 
-enum LockKind {
-
-    case read
-    case write
-}
-
-public protocol Lock {
+public protocol Lock: class {
 
     associatedtype LockType
 
@@ -22,18 +16,57 @@ public protocol Lock {
     func withWriteLock<T>(_ call: () -> T) -> T
 }
 
-protocol MututalLock: Lock {
+public protocol RawLock {
+
+    func lockRead()
+    func lockWrite()
+    func unlock()
+}
+
+public protocol MututalLock: Lock {
 
     func withAnyLock<T>(_ call: () -> T) -> T
 }
 
-extension MututalLock {
+public extension MututalLock {
 
+    @inline(__always)
     public func withReadLock<T>(_ call: () -> T) -> T {
         return withAnyLock(call)
     }
 
+    @inline(__always)
     public func withWriteLock<T>(_ call: () -> T) -> T {
         return withAnyLock(call)
+    }
+}
+
+public protocol MututalRawLock: RawLock {
+
+    func lock()
+}
+
+public extension MututalRawLock {
+
+    @inline(__always)
+    public func lockRead() {
+        lock()
+    }
+
+    @inline(__always)
+    public func lockWrite() {
+        lock()
+    }
+}
+
+
+public extension MututalLock where Self: MututalRawLock {
+
+    @inline(__always)
+    func withAnyLock<T>(_ call: () -> T) -> T {
+        lock()
+        let val = call()
+        unlock()
+        return val
     }
 }

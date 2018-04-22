@@ -10,10 +10,12 @@ import Foundation
 final public class DispatchLock: MututalLock {
 
     public typealias LockType = DispatchQueue
-    private let queue = DispatchQueue(label: "com.atomic.lock_queue")
+    @_versioned
+    let queue = DispatchQueue(label: "com.atomic.lock_queue")
 
     public init() { }
 
+    @inline(__always)
     public func withAnyLock<T>(_ call: () -> T) -> T {
         return queue.sync {
             return call()

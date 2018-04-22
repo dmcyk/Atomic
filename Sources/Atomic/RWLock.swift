@@ -8,40 +8,45 @@
 
 import Foundation
 
-private func acquire(lock: UnsafeMutablePointer<pthread_rwlock_t>, type: LockKind) -> UnsafeMutablePointer<pthread_rwlock_t>? {
+@_versioned
+func acquire(lock: UnsafeMutablePointer<pthread_rwlock_t>, isWrite: Bool) -> UnsafeMutablePointer<pthread_rwlock_t>? {
     let acquired: Int32 = {
-        switch type {
-        case .read:
-            var attr: Int32 = pthread_rwlock_rdlock(lock)
-            while attr == EAGAIN {
-                usleep(1000 * 100) // sleep for 100 milliseconds
-                attr = pthread_rwlock_rdlock(lock)
-            }
-
-            return attr
-        case .write: return pthread_rwlock_wrlock(lock)
+        if isWrite {
+            return pthread_rwlock_wrlock(lock)
         }
+
+        // Too many locks acquired, need to wait until available
+        var attr: Int32 = pthread_rwlock_rdlock(lock)
+        while attr == EAGAIN {
+            usleep(1000 * 50) // sleep for 50 milliseconds
+            attr = pthread_rwlock_rdlock(lock)
+        }
+
+        return attr
     }()
 
     assert(acquired != EINVAL, "passing uninitialized lock")
 
-    if acquired == EDEADLK { // trying to acquire lock on already locked thread, so there's no need to unlock
+    if acquired == EDEADLK { // trying to acquire lock on already locked thread, so there's no need to unlock - RecusiveLock behaviour
         return nil
     }
     return lock
 }
 
-private func unlock(lock: UnsafeMutablePointer<pthread_rwlock_t>?) {
+@_versioned
+func unlock(lock: UnsafeMutablePointer<pthread_rwlock_t>?) {
     if let lock = lock {
         pthread_rwlock_unlock(lock)
     }
 }
 
+/// Implemented as `recursive` lock, through check for `EDEADLK` message
+/// In case case there's no need to unlock such lock
 final public class ReadWriteLock: Lock {
 
     public typealias LockType = pthread_rwlock_t
-
-    private var lock: pthread_rwlock_t
+    @_versioned
+    var lock: pthread_rwlock_t
 
     public init() {
         self.lock = pthread_rwlock_t()
@@ -52,25 +57,17 @@ final public class ReadWriteLock: Lock {
         pthread_rwlock_destroy(&self.lock)
     }
 
-    func withLock<T>(of kind: LockKind, _ call: () -> T) -> T {
-        switch kind {
-        case .read:
-            return withReadLock(call)
-        case .write:
-            return withWriteLock(call)
-        }
-    }
-
-
+    @inline(__always)
     public func withReadLock<T>(_ call: () -> T) -> T {
-        let lock = acquire(lock: &self.lock, type: .read)
+        let lock = acquire(lock: &self.lock, isWrite: false)
         let val = call()
         unlock(lock: lock)
         return val
     }
 
+    @inline(__always)
     public func withWriteLock<T>(_ call: () -> T) -> T {
-        let lock = acquire(lock: &self.lock, type: .write)
+        let lock = acquire(lock: &self.lock, isWrite: true)
         let val = call()
         unlock(lock: lock)
         return val

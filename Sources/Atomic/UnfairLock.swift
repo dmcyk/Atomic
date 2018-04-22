@@ -8,21 +8,23 @@
 import Foundation
 
 @available(macOS 10.12, iOS 10.0, *)
-final public class _UnfairLock: MututalLock {
+final public class _UnfairLock: MututalLock, MututalRawLock {
 
     public typealias LockType = os_unfair_lock
 
-    private var lock = os_unfair_lock()
+    @_versioned
+    var _lock = os_unfair_lock()
 
-    public init() {
+    public init() {}
 
+    @inline(__always)
+    public func lock() {
+        os_unfair_lock_lock(&_lock)
     }
 
-    public func withAnyLock<T>(_ call: () -> T) -> T {
-        os_unfair_lock_lock(&lock)
-        let val = call()
-        os_unfair_lock_unlock(&lock)
-        return val
+    @inline(__always)
+    public func unlock() {
+        os_unfair_lock_unlock(&_lock)
     }
 }
 
@@ -30,29 +32,32 @@ final public class UnfairLock: Lock {
 
     public typealias LockType = os_unfair_lock_s
 
-    private var lock: Any
+    @_versioned
+    var _lock: Any
 
     public init() {
         if #available(macOS 10.12, iOS 10.0, *) {
-            lock = _UnfairLock()
+            _lock = _UnfairLock()
         } else {
-            lock = ReadWriteLock()
+            _lock = ReadWriteLock()
         }
     }
 
+    @inline(__always)
     public func withReadLock<T>(_ call: () -> T) -> T {
         if #available(macOS 10.12, iOS 10.0, *) {
-            return (lock as! _UnfairLock).withAnyLock(call)
+            return (_lock as! _UnfairLock).withAnyLock(call)
         } else {
-            return (lock as! ReadWriteLock).withReadLock(call)
+            return (_lock as! ReadWriteLock).withReadLock(call)
         }
     }
 
+    @inline(__always)
     public func withWriteLock<T>(_ call: () -> T) -> T {
         if #available(macOS 10.12, iOS 10.0, *) {
-            return (lock as! _UnfairLock).withAnyLock(call)
+            return (_lock as! _UnfairLock).withAnyLock(call)
         } else {
-            return (lock as! ReadWriteLock).withWriteLock(call)
+            return (_lock as! ReadWriteLock).withWriteLock(call)
         }
     }
 }

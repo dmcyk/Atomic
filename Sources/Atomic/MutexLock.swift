@@ -8,7 +8,8 @@
 
 import Foundation
 
-private func acquire(lock: UnsafeMutablePointer<pthread_mutex_t>) -> UnsafeMutablePointer<pthread_mutex_t>? {
+@_versioned
+func acquire(lock: UnsafeMutablePointer<pthread_mutex_t>) -> UnsafeMutablePointer<pthread_mutex_t>? {
     let acquired: Int32 = pthread_mutex_lock(lock)
     assert(acquired != EINVAL, "passing uninitialized lock")
 
@@ -18,16 +19,20 @@ private func acquire(lock: UnsafeMutablePointer<pthread_mutex_t>) -> UnsafeMutab
     return lock
 }
 
-private func unlock(lock: UnsafeMutablePointer<pthread_mutex_t>?) {
+@_versioned
+func unlock(lock: UnsafeMutablePointer<pthread_mutex_t>?) {
     if let lock = lock {
         pthread_mutex_unlock(lock)
     }
 }
 
+/// Implemented as `recursive` lock, through check for `EDEADLK` message
+/// In case case there's no need to unlock such lock
 final public class MutexLock: MututalLock {
 
     public typealias LockType = pthread_mutex_t
-    private var lock: pthread_mutex_t
+    @_versioned
+    var lock: pthread_mutex_t
 
     public init() {
         self.lock = pthread_mutex_t()
@@ -38,7 +43,8 @@ final public class MutexLock: MututalLock {
         pthread_mutex_destroy(&self.lock)
     }
 
-    func withAnyLock<T>(_ call: () -> T) -> T {
+    @inline(__always)
+    public func withAnyLock<T>(_ call: () -> T) -> T {
         let lock = acquire(lock: &self.lock)
         let val = call()
         unlock(lock: lock)
